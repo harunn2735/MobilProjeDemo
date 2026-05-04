@@ -13,7 +13,7 @@ import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 const C = COLORS.family;
 
 export default function GeofenceMapScreen() {
-  const { geofence, saveGeofence, safePoints, addSafePoint, liveChildLocation, childProfile } = useApp();
+  const { geofence, saveGeofence, safePoints, addSafePoint, removeSafePoint, updateSafePoint, liveChildLocation, childProfile } = useApp();
   const mapRef = useRef(null);
   const [showFamily, setShowFamily] = useState(true);
   const [center, setCenter] = useState(
@@ -86,6 +86,7 @@ export default function GeofenceMapScreen() {
   };
 
   const [lockCenter, setLockCenter] = useState(true);
+  const [editingPoint, setEditingPoint] = useState(null);
 
   const onMapPress = (e) => {
     if (mode === 'geofence' && !lockCenter) {
@@ -127,14 +128,14 @@ export default function GeofenceMapScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>🗺️ Akıllı Takip</Text>
           <View style={styles.modeRow}>
-            {['geofence', 'safepoint'].map(m => (
+            {['geofence', 'safepoint', 'list'].map(m => (
               <TouchableOpacity
                 key={m}
                 style={[styles.modeBtn, mode === m && styles.modeBtnActive]}
-                onPress={() => setMode(m)}
+                onPress={() => { setMode(m); setEditingPoint(null); }}
               >
                 <Text style={[styles.modeBtnTxt, mode === m && { color: '#fff' }]}>
-                  {m === 'geofence' ? 'Alan' : 'Adres Ekle'}
+                  {m === 'geofence' ? 'Alan' : m === 'safepoint' ? 'Adres Ekle' : `Noktalar${safePoints.length > 0 ? ` (${safePoints.length})` : ''}`}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -223,7 +224,7 @@ export default function GeofenceMapScreen() {
                   <Text style={styles.saveBtnTxt}>Değişiklikleri Onayla</Text>
                 </TouchableOpacity>
               </View>
-            ) : (
+            ) : mode === 'safepoint' ? (
               <View key="safepoint-view">
                  <Text style={styles.label}>🏠 Yeni Güvenli Adres Tanımla</Text>
                  <TextInput 
@@ -254,6 +255,74 @@ export default function GeofenceMapScreen() {
                  >
                    <Text style={styles.saveBtnTxt}>{addressControl.loading ? 'Sorgulanıyor...' : 'Adresi Güvenli Nokta Yap'}</Text>
                  </TouchableOpacity>
+              </View>
+            ) : (
+              <View key="list-view">
+                {safePoints.length === 0 ? (
+                  <View style={{ padding: SPACING.lg, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 40, marginBottom: 8 }}>📍</Text>
+                    <Text style={{ color: C.textSecondary, fontSize: FONTS.sizes.md }}>Henüz güvenli nokta yok</Text>
+                  </View>
+                ) : safePoints.map(pt => (
+                  editingPoint?.id === pt.id ? (
+                    <View key={pt.id} style={styles.editCard}>
+                      <TextInput
+                        style={styles.editInput}
+                        value={editingPoint.tempName}
+                        onChangeText={t => setEditingPoint(p => ({ ...p, tempName: t }))}
+                        placeholder="İsim"
+                      />
+                      <TextInput
+                        style={styles.editInput}
+                        value={editingPoint.tempPhone}
+                        onChangeText={t => setEditingPoint(p => ({ ...p, tempPhone: t }))}
+                        placeholder="Telefon"
+                        keyboardType="phone-pad"
+                      />
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        <TouchableOpacity
+                          style={[styles.saveBtn, { flex: 1, paddingVertical: 10 }]}
+                          onPress={() => {
+                            updateSafePoint(pt.id, { name: editingPoint.tempName, phone: editingPoint.tempPhone });
+                            setEditingPoint(null);
+                          }}
+                        >
+                          <Text style={styles.saveBtnTxt}>Kaydet</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.saveBtn, { flex: 1, paddingVertical: 10, backgroundColor: C.textSecondary }]}
+                          onPress={() => setEditingPoint(null)}
+                        >
+                          <Text style={styles.saveBtnTxt}>İptal</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <View key={pt.id} style={styles.safePointCard}>
+                      <Text style={{ fontSize: 28, marginRight: 10 }}>{pt.emoji || '📍'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.safePointName}>{pt.name}</Text>
+                        {pt.phone ? <Text style={styles.safePointPhone}>{pt.phone}</Text> : null}
+                        <Text style={styles.safePointAddr} numberOfLines={1}>{pt.address}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={{ padding: 6 }}
+                        onPress={() => setEditingPoint({ id: pt.id, tempName: pt.name || '', tempPhone: pt.phone || '' })}
+                      >
+                        <Ionicons name="pencil" size={18} color={C.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ padding: 6 }}
+                        onPress={() => Alert.alert('Sil', `"${pt.name}" silinsin mi?`, [
+                          { text: 'İptal', style: 'cancel' },
+                          { text: 'Sil', style: 'destructive', onPress: () => removeSafePoint(pt.id) },
+                        ])}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={C.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  )
+                ))}
               </View>
             )}
           </View>
@@ -335,4 +404,13 @@ const styles = StyleSheet.create({
   lockBtnActive: { backgroundColor: '#10B981', borderColor: '#10B981' },
   lockBtnTxt: { fontSize: 11, fontWeight: '700', color: '#64748B' },
   bottomScroll: { maxHeight: 300, backgroundColor: C.surface },
+  safePointCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface,
+    borderBottomWidth: 1, borderBottomColor: C.border, padding: SPACING.md,
+  },
+  safePointName: { fontSize: FONTS.sizes.md, fontWeight: '700', color: C.text },
+  safePointPhone: { fontSize: FONTS.sizes.sm, color: C.primary, marginTop: 1 },
+  safePointAddr: { fontSize: FONTS.sizes.xs, color: C.textSecondary, marginTop: 1 },
+  editCard: { backgroundColor: C.surface, padding: SPACING.md, borderBottomWidth: 1, borderBottomColor: C.border },
+  editInput: { backgroundColor: '#F8FAFC', padding: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: '#E2E8F0', fontSize: 14, marginBottom: 8 },
 });

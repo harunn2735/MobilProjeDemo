@@ -7,15 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { useRoutines } from '../../context/RoutineContext';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-import { useNavigation } from '@react-navigation/native';
-import { ROUTES } from '../../constants/routes';
 
 const C = COLORS.family;
 
 export default function FamilyDashboard() {
   const { childProfile, geofence, safePoints, alerts, points, logout, familyData, liveChildLocation, sendPeriodicUpdate, pendingSubmissionsCount, pendingRewardRequestsCount } = useApp();
   const { todayCompleted, todayTotal } = useRoutines();
-  const navigation = useNavigation();
   const progress = todayTotal > 0 ? todayCompleted / todayTotal : 0;
 
   const stats = [
@@ -148,37 +145,6 @@ export default function FamilyDashboard() {
           </View>
         )}
 
-        {/* Hızlı Erişim */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hızlı Erişim</Text>
-          <View style={styles.quickGrid}>
-            {[
-              { label: 'Güvenli Alan', icon: 'map', route: 'GeofenceMap', color: C.primary, badge: 0 },
-              { label: 'Rutin Ekle', icon: 'add-circle', route: 'AddRoutine', color: C.accent, badge: 0 },
-              { label: 'Güvenli Noktalar', icon: 'location', route: 'SafePoints', color: '#8B5CF6', badge: 0 },
-              { label: 'Uyarı Geçmişi', icon: 'notifications', route: 'AlertHistory', color: C.danger, badge: 0 },
-              { label: 'Fotoğraf Onayları', icon: 'camera', route: 'PhotoApproval', color: '#0EA5E9', badge: pendingSubmissionsCount },
-              { label: 'Ödül Sistemi', icon: 'gift', route: 'RewardsManager', color: '#EC4899', badge: pendingRewardRequestsCount },
-            ].map((item, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.quickCard}
-                onPress={() => navigation.navigate(item.route)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: item.color + '20' }]}>
-                  <Ionicons name={item.icon} size={26} color={item.color} />
-                  {item.badge > 0 && (
-                    <View style={[styles.quickBadge, { backgroundColor: item.color }]}>
-                      <Text style={styles.quickBadgeTxt}>{item.badge}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.quickLabel}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -247,19 +213,6 @@ const styles = StyleSheet.create({
   progressBar: { height: 12, backgroundColor: C.border, borderRadius: RADIUS.full, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: C.accent, borderRadius: RADIUS.full },
   progressText: { fontSize: FONTS.sizes.sm, color: C.textSecondary, marginTop: SPACING.sm },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  quickCard: {
-    flex: 1, minWidth: '45%', backgroundColor: C.surface, borderRadius: RADIUS.lg,
-    padding: SPACING.md, alignItems: 'center', ...SHADOWS.sm,
-  },
-  quickIcon: { width: 52, height: 52, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.sm },
-  quickLabel: { fontSize: FONTS.sizes.sm, fontWeight: FONTS.weights.semibold, color: C.text, textAlign: 'center' },
-  quickBadge: {
-    position: 'absolute', top: -4, right: -4,
-    minWidth: 18, height: 18, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
-  },
-  quickBadgeTxt: { color: '#fff', fontSize: 9, fontWeight: '800' },
   alertBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FEF3C7', marginHorizontal: SPACING.lg, marginBottom: SPACING.sm,

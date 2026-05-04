@@ -821,6 +821,15 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const updateSafePoint = async (id, updates) => {
+    const updated = safePoints.map(p => p.id === id ? { ...p, ...updates } : p);
+    setSafePoints(updated);
+    await save('safePoints', updated);
+    if (userType === 'family' && currentUser) {
+      await updateDoc(doc(db, 'families', currentUser.uid), { safePoints: updated });
+    }
+  };
+
   const addAlert = async (alert) => {
     const newAlert = { ...alert, id: Date.now().toString(), timestamp: new Date().toISOString() };
     const updated = [newAlert, ...alerts].slice(0, 50);
@@ -1294,7 +1303,7 @@ export const AppProvider = ({ children }) => {
       childProfile, setChildProfile, updateChildProfile, updateAvatar,
       geofence, saveGeofence,
       save,
-      safePoints, addSafePoint, removeSafePoint,
+      safePoints, addSafePoint, removeSafePoint, updateSafePoint,
       alerts, addAlert,
       points, addPoints,
       badges, unlockBadge,
