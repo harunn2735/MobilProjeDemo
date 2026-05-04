@@ -1,91 +1,162 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { ROUTES } from '../../constants/routes';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-
-const C = COLORS.family;
+import { FONTS, SPACING } from '../../constants/theme';
 
 export default function RoleSelectScreen({ navigation }) {
   const { selectUserType } = useApp();
 
-  // We keep this temporarily if needed elsewhere, though buttons use navigation directly now.
-  const handleSelect = (type) => {
-    selectUserType(type);
-  };
-
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.background} />
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Logo */}
-        <View style={styles.logo}>
-          <Text style={styles.logoEmoji}>🛡️</Text>
-          <Text style={styles.logoTitle}>GuardianBuddy</Text>
-          <Text style={styles.logoSub}>Güvenli Gelecek, Mutlu Çocuk</Text>
-        </View>
+    <LinearGradient colors={['#0F0A1E', '#1E0A3C', '#3B0764']} style={styles.gradient}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
-        {/* Aile Kartı */}
-        <TouchableOpacity style={[styles.card, styles.familyCard]} onPress={() => navigation.navigate(ROUTES.FAMILY_LOGIN)} activeOpacity={0.85}>
-          <View style={styles.cardIcon}>
-            <Text style={{ fontSize: 54 }}>👨‍👩‍👧</Text>
+          {/* Logo */}
+          <View style={styles.logoWrap}>
+            <View style={styles.logoIconRing}>
+              <Text style={styles.logoEmoji}>🛡️</Text>
+            </View>
+            <Text style={styles.logoTitle}>Buddy</Text>
+            <Text style={styles.logoSub}>Güvenli Gelecek, Mutlu Çocuk</Text>
           </View>
-          <Text style={styles.cardTitle}>Aile Girişi</Text>
-          <Text style={styles.cardDesc}>
-            Güvenli alan belirle, günlük görevler oluştur, çocuğunun konumunu takip et.
-          </Text>
-          <View style={styles.cardBtn}>
-            <Text style={styles.cardBtnText}>Aile Olarak Giriş</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
-          </View>
-        </TouchableOpacity>
 
-        {/* Çocuk Kartı */}
-        <TouchableOpacity style={[styles.card, styles.childCard]} onPress={() => navigation.navigate(ROUTES.CHILD_LOGIN)} activeOpacity={0.85}>
-          <View style={styles.cardIcon}>
-            <Text style={{ fontSize: 54 }}>🦁</Text>
-          </View>
-          <Text style={[styles.cardTitle, { color: '#fff' }]}>Çocuk Girişi</Text>
-          <Text style={[styles.cardDesc, { color: '#E9D5FF' }]}>
-            Görevlerini tamamla, puan kazan ve yardım gerektiğinde aileni ara!
-          </Text>
-          <View style={[styles.cardBtn, { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
-            <Text style={styles.cardBtnText}>Çocuk Olarak Giriş</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
-          </View>
-        </TouchableOpacity>
+          {/* Aile Kartı */}
+          <TouchableOpacity
+            style={styles.familyCard}
+            onPress={() => navigation.navigate(ROUTES.FAMILY_LOGIN)}
+            activeOpacity={0.88}
+          >
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBadge, { backgroundColor: '#EFF6FF' }]}>
+                <Text style={styles.cardEmoji}>👨‍👩‍👧</Text>
+              </View>
+              <View style={styles.cardArrow}>
+                <Ionicons name="arrow-forward" size={20} color="#2563EB" />
+              </View>
+            </View>
+            <Text style={styles.familyCardTitle}>Aile Girişi</Text>
+            <Text style={styles.familyCardDesc}>
+              Güvenli alan belirle, günlük görevler oluştur, çocuğunun konumunu takip et.
+            </Text>
+            <LinearGradient
+              colors={['#2563EB', '#1D4ED8']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.cardBtn}
+            >
+              <Text style={styles.cardBtnText}>Aile Olarak Giriş</Text>
+              <Ionicons name="arrow-forward" size={16} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
 
-        <Text style={styles.version}>v1.0</Text>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Çocuk Kartı */}
+          <TouchableOpacity
+            style={styles.childCardOuter}
+            onPress={() => navigation.navigate(ROUTES.CHILD_LOGIN)}
+            activeOpacity={0.88}
+          >
+            <LinearGradient
+              colors={['#6D28D9', '#7C3AED', '#A855F7']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.childCard}
+            >
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                  <Text style={styles.cardEmoji}>🦁</Text>
+                </View>
+                <View style={[styles.cardArrow, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </View>
+              </View>
+              <Text style={styles.childCardTitle}>Çocuk Girişi</Text>
+              <Text style={styles.childCardDesc}>
+                Görevlerini tamamla, puan kazan ve yardım gerektiğinde aileni ara!
+              </Text>
+              <View style={styles.childCardBtn}>
+                <Text style={styles.cardBtnText}>Çocuk Olarak Giriş</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <Text style={styles.version}>v1.0</Text>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.background },
-  container: { padding: SPACING.xl, paddingBottom: 32 },
-  logo: { alignItems: 'center', marginVertical: SPACING.xxl },
-  logoEmoji: { fontSize: 64 },
-  logoTitle: { fontSize: FONTS.sizes.xxl, fontWeight: FONTS.weights.heavy, color: C.text, marginTop: SPACING.sm },
-  logoSub: { fontSize: FONTS.sizes.md, color: C.textSecondary, marginTop: 4 },
-  card: {
-    borderRadius: RADIUS.xl, padding: SPACING.xl, marginBottom: SPACING.lg,
-    alignItems: 'center', ...SHADOWS.md,
+  gradient: { flex: 1 },
+  safe: { flex: 1 },
+  container: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, paddingBottom: 40 },
+
+  // Logo
+  logoWrap: { alignItems: 'center', marginTop: SPACING.xl, marginBottom: SPACING.xxxl },
+  logoIconRing: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: SPACING.lg,
+    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5, shadowRadius: 20, elevation: 12,
   },
-  familyCard: { backgroundColor: C.surface, borderWidth: 2, borderColor: C.border },
-  childCard: { backgroundColor: COLORS.child.primary },
-  cardIcon: { marginBottom: SPACING.md },
-  cardTitle: { fontSize: FONTS.sizes.xl, fontWeight: FONTS.weights.bold, color: C.text, marginBottom: SPACING.sm },
-  cardDesc: { fontSize: FONTS.sizes.sm, color: C.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: SPACING.lg },
+  logoEmoji: { fontSize: 52 },
+  logoTitle: {
+    fontSize: 42, fontWeight: '800', color: '#FFFFFF',
+    letterSpacing: 1, marginBottom: SPACING.xs,
+  },
+  logoSub: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.3 },
+
+  // Family Card
+  familyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: SPACING.xl,
+    marginBottom: SPACING.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
+  iconBadge: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  cardEmoji: { fontSize: 38 },
+  cardArrow: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center',
+  },
+  familyCardTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: '#1E293B', marginBottom: SPACING.xs },
+  familyCardDesc: { fontSize: FONTS.sizes.sm, color: '#64748B', lineHeight: 20, marginBottom: SPACING.xl },
   cardBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    backgroundColor: C.primary, borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
+    borderRadius: 999, paddingVertical: 14, paddingHorizontal: SPACING.xl,
   },
-  cardBtnText: { color: '#fff', fontWeight: FONTS.weights.bold, fontSize: FONTS.sizes.md },
-  version: { textAlign: 'center', color: C.textSecondary, fontSize: FONTS.sizes.xs, marginTop: SPACING.xl },
+  cardBtnText: { color: '#fff', fontWeight: '700', fontSize: FONTS.sizes.md },
+
+  // Child Card
+  childCardOuter: {
+    borderRadius: 28, marginBottom: SPACING.xl,
+    shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.45, shadowRadius: 20, elevation: 12,
+  },
+  childCard: { borderRadius: 28, padding: SPACING.xl },
+  childCardTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: '#FFFFFF', marginBottom: SPACING.xs },
+  childCardDesc: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.75)', lineHeight: 20, marginBottom: SPACING.xl },
+  childCardBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
+    borderRadius: 999, paddingVertical: 14, paddingHorizontal: SPACING.xl,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+  },
+
+  version: { textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: FONTS.sizes.xs },
 });

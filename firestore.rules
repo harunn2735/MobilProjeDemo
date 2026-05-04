@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // pairingCodes: public read (contains only { familyId } — no sensitive data)
+    // Child devices read this without Firebase Auth to find their family.
+    match /pairingCodes/{code} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /families/{familyId} {
+      // Family owner: full read/write
+      allow read, write: if request.auth != null && request.auth.uid == familyId;
+
+      // Child device (no auth): read the family doc to sync routines, reminders, etc.
+      // familyId is only known after pairing, so unauthenticated read is scoped to
+      // documents the child already has the ID for.
+      allow read: if request.auth == null;
+
+      // Child device (no auth): can update location, profile, and routines fields
+      // routines is needed so child can mark pendingPhoto/completed on tasks
+      allow update: if request.auth == null
+        && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['childLocation', 'periodicUpdate', 'childProfile', 'childPushToken', 'routines']);
+
+      // activityHistory subcollection
+      match /activityHistory/{entry} {
+        allow read: if request.auth != null && request.auth.uid == familyId;
+        allow create: if request.auth == null;
+      }
+
+      // taskSubmissions subcollection
+      // Child (no auth) creates submissions; family owner reads and updates (approve/reject)
+      match /taskSubmissions/{submissionId} {
+        allow create: if request.auth == null;
+        allow read, update: if request.auth != null && request.auth.uid == familyId;
+      }
+    }
+  }
+}

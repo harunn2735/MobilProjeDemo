@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, doc, setDoc, getDocs, query, where, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, updateDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Battery from 'expo-battery';
@@ -183,14 +183,18 @@ const performBackgroundUpdate = async (locationInput = null) => {
     let childName = await AsyncStorage.getItem('childName') || 'Çocuk';
 
     if (!parentPushToken) {
-       const familySnap = await getDoc(familyRef);
-       if (familySnap.exists()) {
-         const fData = familySnap.data();
-         parentPushToken = fData.parentPushToken;
-         childName = fData.childProfile?.name || 'Çocuk';
-         if (parentPushToken) await AsyncStorage.setItem('parentPushToken', parentPushToken);
-         if (childName) await AsyncStorage.setItem('childName', childName);
-       }
+      try {
+        const familySnap = await getDoc(familyRef);
+        if (familySnap.exists()) {
+          const fData = familySnap.data();
+          parentPushToken = fData.parentPushToken;
+          childName = fData.childProfile?.name || 'Çocuk';
+          if (parentPushToken) await AsyncStorage.setItem('parentPushToken', parentPushToken);
+          if (childName) await AsyncStorage.setItem('childName', childName);
+        }
+      } catch (e) {
+        console.warn('[Background] parentPushToken read failed (rules?):', e.message);
+      }
     }
 
     // Reverse Geocode to get address
@@ -301,7 +305,11 @@ const performBackgroundUpdate = async (locationInput = null) => {
 
     updateObj['childLocation.lastBackgroundTaskSync'] = now.toISOString();
 
-    await updateDoc(familyRef, updateObj);
+    try {
+      await updateDoc(familyRef, updateObj);
+    } catch (e) {
+      console.warn('[Background] Firestore location write failed (check rules):', e.message);
+    }
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch (e) {
     console.error('[Background] Task failed:', e);
@@ -346,10 +354,14 @@ export const AppProvider = ({ children }) => {
   const [streak, setStreak] = useState(0);
   const [lastStreakUpdate, setLastStreakUpdate] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [taskSubmissions, setTaskSubmissions] = useState([]);
+  const [rewards, setRewards] = useState([]);
+  const [rewardRequests, setRewardRequests] = useState([]);
 
   const lastGeofenceAlertRef = useRef(null);
   const lastRoutineReminderRef = useRef(null);
   const lastPeriodicNotifyRef = useRef(null);
+  const pairingCodeSyncedRef = useRef(false);
 
   useEffect(() => {
     loadData();
@@ -370,7 +382,12 @@ export const AppProvider = ({ children }) => {
       }
       setIsLoading(false);
     });
-    return () => authUnsubscribe();
+    // Safety net: if neither loadData nor onAuthStateChanged resolves in 6s, unblock UI
+    const safetyTimer = setTimeout(() => setIsLoading(false), 6000);
+    return () => {
+      authUnsubscribe();
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   const requestPermissions = async () => {
@@ -415,6 +432,9 @@ export const AppProvider = ({ children }) => {
   // Sync Listener Effect
   useEffect(() => {
     let unsubscribe;
+    let historyUnsubscribe;
+    let submissionsUnsub;
+    let foregroundSyncCleanup;
     const setupSync = async () => {
       const type = userType || await AsyncStorage.getItem('userType');
       const familyId = (type === 'family' && currentUser) 
@@ -428,8 +448,28 @@ export const AppProvider = ({ children }) => {
         unsubscribe = onSnapshot(doc(db, 'families', familyId), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
+
+            // Generate pairingCode for accounts created before this field was added
+            if (!data.pairingCode) {
+              const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+              updateDoc(doc(db, 'families', familyId), { pairingCode: newCode })
+                .catch(e => console.warn('[onSnapshot] pairingCode write failed:', e.message));
+              setDoc(doc(db, 'pairingCodes', newCode), { familyId })
+                .catch(e => console.warn('[onSnapshot] pairingCodes write failed:', e.message));
+              // onSnapshot will fire again with the new code — skip this incomplete update
+              return;
+            }
+
             setFamilyData(data);
-            
+
+            // Ensure pairingCodes lookup doc exists for older accounts (one-time per session)
+            if (type === 'family' && data.pairingCode && !pairingCodeSyncedRef.current) {
+              pairingCodeSyncedRef.current = true;
+              setDoc(doc(db, 'pairingCodes', data.pairingCode), { familyId }, { merge: true })
+                .then(() => console.log('[onSnapshot] pairingCodes synced:', data.pairingCode))
+                .catch(e => console.warn('[onSnapshot] pairingCodes write failed:', e.message));
+            }
+
             // Sync specific parts
             if (data.childLocation) {
               setLiveChildLocation(data.childLocation);
@@ -530,13 +570,15 @@ export const AppProvider = ({ children }) => {
                setStreak(currentStreak);
                setLastStreakUpdate(data.lastStreakUpdate);
             }
+            if (data.rewards) setRewards(data.rewards);
+            if (data.rewardRequests) setRewardRequests(data.rewardRequests);
           }
         });
 
         // Activity History Listener (Parent only)
         if (type === 'family') {
           const historyRef = collection(db, 'families', familyId, 'activityHistory');
-          onSnapshot(historyRef, (snap) => {
+          historyUnsubscribe = onSnapshot(historyRef, (snap) => {
             const acts = snap.docs.map(d => ({ id: d.id, ...d.data() }))
               .sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))
               .slice(0, 30);
@@ -544,16 +586,29 @@ export const AppProvider = ({ children }) => {
           });
         }
 
+        // Task Submissions Listener (both family and child)
+        const submissionsRef = collection(db, 'families', familyId, 'taskSubmissions');
+        submissionsUnsub = onSnapshot(submissionsRef, (snap) => {
+          const subs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+          setTaskSubmissions(subs);
+        });
+
         // If child, start location and foreground sync
         if (type === 'child') {
           startLocationTracking(familyId);
-          startForegroundSync(familyId);
+          foregroundSyncCleanup = startForegroundSync(familyId);
         }
       }
     };
 
     setupSync();
-    return () => { if (unsubscribe) unsubscribe(); };
+    return () => {
+      if (unsubscribe) unsubscribe();
+      if (historyUnsubscribe) historyUnsubscribe();
+      if (submissionsUnsub) submissionsUnsub();
+      if (foregroundSyncCleanup) foregroundSyncCleanup();
+    };
   }, [userType, currentUser]);
 
   const startLocationTracking = async (familyId) => {
@@ -657,10 +712,14 @@ export const AppProvider = ({ children }) => {
     try {
       const keys = ['userType', 'geofence', 'safePoints', 'alerts', 'points', 'badges', 'childProfile', 'streak', 'lastStreakUpdate'];
       const results = await AsyncStorage.multiGet(keys);
+
+      let loadedUserType = null;
+      let loadedChildProfile = null;
+
       results.forEach(([key, value]) => {
         if (!value) return;
-        if (key === 'userType') setUserType(value);
-        
+        if (key === 'userType') { setUserType(value); loadedUserType = value; }
+
         const parsed = (key !== 'userType') ? JSON.parse(value) : value;
 
         if (key === 'geofence') setGeofence(parsed);
@@ -668,15 +727,29 @@ export const AppProvider = ({ children }) => {
         if (key === 'alerts') setAlerts(sanitizeList(parsed));
         if (key === 'points') setPoints(parsed);
         if (key === 'badges') setBadges(sanitizeList(parsed));
-        if (key === 'childProfile') setChildProfile(parsed);
+        if (key === 'childProfile') { setChildProfile(parsed); loadedChildProfile = parsed; console.log('[loadData] childProfile read:', parsed); }
         if (key === 'lastStreakUpdate') setLastStreakUpdate(parsed);
         if (key === 'streak') {
-           // streak'i set etmeden önce lastStreakUpdate verisini de bulmalıyız
            const lsu = results.find(([k]) => k === 'lastStreakUpdate')?.[1];
            const streakVal = lsu ? checkStreakReset(parsed, JSON.parse(lsu)) : parsed;
            setStreak(streakVal);
         }
       });
+
+      console.log('[loadData] done — userType:', loadedUserType, '| childProfile.name:', loadedChildProfile?.name);
+
+      // Auto-restore child session: if userType was cleared (e.g. crash) but profile + linkedFamilyId exist
+      // Skip restore if child explicitly logged out (flag is set and cleared by ChildLoginScreen)
+      const childLoggedOut = await AsyncStorage.getItem('childLoggedOut');
+      if (!childLoggedOut && !loadedUserType && loadedChildProfile?.name) {
+        const linkedFamilyId = await AsyncStorage.getItem('linkedFamilyId');
+        console.log('[loadData] auto-restore check — linkedFamilyId:', linkedFamilyId);
+        if (linkedFamilyId) {
+          await AsyncStorage.setItem('userType', 'child');
+          setUserType('child');
+          console.log('[loadData] child session auto-restored');
+        }
+      }
     } catch (e) {
       console.log('Veri yüklenemedi:', e);
     } finally {
@@ -834,15 +907,25 @@ export const AppProvider = ({ children }) => {
   const updateChildProfile = async (name, age, avatar) => {
     const updatedProfile = { name, age, avatar };
     setChildProfile(updatedProfile);
+
     await save('childProfile', updatedProfile);
+    const savedCheck = await AsyncStorage.getItem('childProfile');
+    console.log('[updateChildProfile] AsyncStorage write — key:childProfile value:', savedCheck);
 
     const familyId = await AsyncStorage.getItem('linkedFamilyId');
+    console.log('[updateChildProfile] linkedFamilyId:', familyId);
     if (familyId) {
-      await updateDoc(doc(db, 'families', familyId), { childProfile: updatedProfile });
+      try {
+        await updateDoc(doc(db, 'families', familyId), { childProfile: updatedProfile });
+        console.log('[updateChildProfile] Firestore synced');
+      } catch (e) {
+        console.warn('[updateChildProfile] Firestore sync failed:', e.message);
+      }
     }
-    
-    // FINALLY set userType to trigger navigation to dashboard
+
     await AsyncStorage.setItem('userType', 'child');
+    const utCheck = await AsyncStorage.getItem('userType');
+    console.log('[updateChildProfile] AsyncStorage write — key:userType value:', utCheck);
     setUserType('child');
   };
 
@@ -891,6 +974,52 @@ export const AppProvider = ({ children }) => {
 
   const loginFamily = async (email, password) => {
     const cred = await signInWithEmailAndPassword(authInstance, email, password);
+    const familyId = cred.user.uid;
+    // Fetch family data immediately so FamilyDashboard shows the pairing code right away
+    const docSnap = await getDoc(doc(db, 'families', familyId));
+
+    let data;
+    if (docSnap.exists()) {
+      data = docSnap.data();
+    } else {
+      // Firestore doc missing (auth account exists but families doc was never written)
+      // Create a minimal document so the app is functional
+      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+      data = { email: cred.user.email, pairingCode: newCode, createdAt: new Date().toISOString() };
+      try {
+        await setDoc(doc(db, 'families', familyId), data);
+        await setDoc(doc(db, 'pairingCodes', newCode), { familyId });
+        console.log('[loginFamily] family doc created with pairingCode:', newCode);
+      } catch (e) {
+        console.warn('[loginFamily] family doc create failed:', e.message);
+      }
+    }
+
+    // If this is an old account without a pairingCode, create one now
+    if (!data.pairingCode) {
+      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+      try {
+        await updateDoc(doc(db, 'families', familyId), { pairingCode: newCode });
+        await setDoc(doc(db, 'pairingCodes', newCode), { familyId });
+        data.pairingCode = newCode;
+        console.log('[loginFamily] pairingCode created:', newCode);
+      } catch (e) {
+        console.warn('[loginFamily] pairingCode create failed:', e.message);
+      }
+    }
+
+    setFamilyData(data);
+
+    // Ensure pairingCodes lookup doc exists (critical for child linking)
+    if (data.pairingCode) {
+      try {
+        await setDoc(doc(db, 'pairingCodes', data.pairingCode), { familyId }, { merge: true });
+        console.log('[loginFamily] pairingCodes synced:', data.pairingCode);
+      } catch (e) {
+        console.warn('[loginFamily] pairingCodes write failed:', e.message);
+      }
+    }
+
     await AsyncStorage.setItem('userType', 'family');
     setUserType('family');
     return cred.user;
@@ -901,13 +1030,25 @@ export const AppProvider = ({ children }) => {
     const userId = cred.user.uid;
     const pairingCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit code
 
-    await setDoc(doc(db, 'families', userId), {
+    const familyDoc = {
       parentName: name,
       email: email,
       phone: phone,
       pairingCode: pairingCode,
       createdAt: new Date().toISOString()
-    });
+    };
+
+    // Set familyData before setDoc so it's available the moment FamilyDashboard mounts
+    setFamilyData(familyDoc);
+
+    await setDoc(doc(db, 'families', userId), familyDoc);
+    // Write a lightweight lookup doc so unauthenticated child devices can find familyId by code
+    try {
+      await setDoc(doc(db, 'pairingCodes', pairingCode), { familyId: userId });
+      console.log('[registerFamily] pairingCodes written:', pairingCode);
+    } catch (e) {
+      console.warn('[registerFamily] pairingCodes write failed:', e.message);
+    }
 
     await AsyncStorage.setItem('userType', 'family');
     setUserType('family');
@@ -915,19 +1056,15 @@ export const AppProvider = ({ children }) => {
   };
 
   const linkChildDevice = async (code) => {
-    // Search for a family with this code
-    const q = query(collection(db, 'families'), where('pairingCode', '==', code));
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.empty) {
+    // Read the lightweight pairingCodes doc — no auth required, no sensitive data exposed
+    const codeSnap = await getDoc(doc(db, 'pairingCodes', code.trim()));
+    if (!codeSnap.exists()) {
       throw new Error('Eşleştirme kodu bulunamadı. Lütfen kontrol edip tekrar deneyin.');
     }
 
-    const familyDoc = querySnapshot.docs[0];
-    const familyId = familyDoc.id;
-
+    const familyId = codeSnap.data().familyId;
     await AsyncStorage.setItem('linkedFamilyId', familyId);
-    
+
     // DO NOT setUserType('child') here yet, wait for profile setup
     return familyId;
   };
@@ -996,11 +1133,159 @@ export const AppProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    const type = userType;
     await signOut(authInstance);
     await AsyncStorage.removeItem('userType');
-    await AsyncStorage.removeItem('linkedFamilyId');
+    if (type === 'child') {
+      // Keep linkedFamilyId (no re-pairing needed), but set flag to block auto-restore
+      await AsyncStorage.setItem('childLoggedOut', '1');
+    } else {
+      await AsyncStorage.removeItem('linkedFamilyId');
+    }
+    console.log('[logout] type:', type);
     setUserType(null);
   };
+
+  // ─── Photo Verification System ───────────────────────────────────────────────
+
+  const submitTaskPhoto = async (routineId, routineTitle, routineEmoji, routinePoints, imageBase64) => {
+    const familyId = await AsyncStorage.getItem('linkedFamilyId');
+    console.log('[submitTaskPhoto] familyId:', familyId);
+    if (!familyId) throw new Error('Aile bağlantısı bulunamadı.');
+
+    const submissionId = `${routineId}_${Date.now()}`;
+    const firestorePath = `families/${familyId}/taskSubmissions/${submissionId}`;
+    console.log('[submitTaskPhoto] path:', firestorePath);
+    console.log('[submitTaskPhoto] base64 length:', imageBase64?.length ?? 0);
+
+    const photoUrl = `data:image/jpeg;base64,${imageBase64}`;
+
+    try {
+      await setDoc(doc(db, 'families', familyId, 'taskSubmissions', submissionId), {
+        routineId,
+        routineTitle,
+        routineEmoji: routineEmoji || '📋',
+        routinePoints: routinePoints || 1,
+        photoUrl,
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+        reviewedAt: null,
+      });
+      console.log('[submitTaskPhoto] success');
+    } catch (e) {
+      console.error('[submitTaskPhoto] Firestore error — code:', e.code, '| message:', e.message);
+      throw e;
+    }
+
+    return submissionId;
+  };
+
+  const approveSubmission = async (submissionId, routineId, routinePoints) => {
+    const familyId = currentUser?.uid || await AsyncStorage.getItem('linkedFamilyId');
+    if (!familyId) return;
+
+    await updateDoc(doc(db, 'families', familyId, 'taskSubmissions', submissionId), {
+      status: 'approved',
+      reviewedAt: new Date().toISOString(),
+    });
+
+    // Mark routine as completed + award points in the family doc
+    const snap = await getDoc(doc(db, 'families', familyId));
+    if (snap.exists()) {
+      const data = snap.data();
+      const updatedRoutines = (data.routines || []).map(r =>
+        r.id === routineId ? { ...r, completed: true, pendingPhoto: false, submissionId: null } : r
+      );
+      const newPoints = (data.points || 0) + routinePoints;
+      await updateDoc(doc(db, 'families', familyId), { routines: updatedRoutines, points: newPoints });
+      setPoints(newPoints);
+    }
+  };
+
+  const rejectSubmission = async (submissionId, routineId) => {
+    const familyId = currentUser?.uid || await AsyncStorage.getItem('linkedFamilyId');
+    if (!familyId) return;
+
+    await updateDoc(doc(db, 'families', familyId, 'taskSubmissions', submissionId), {
+      status: 'rejected',
+      reviewedAt: new Date().toISOString(),
+    });
+
+    // Clear pendingPhoto on the routine so child can re-submit
+    const snap = await getDoc(doc(db, 'families', familyId));
+    if (snap.exists()) {
+      const data = snap.data();
+      const updatedRoutines = (data.routines || []).map(r =>
+        r.id === routineId ? { ...r, pendingPhoto: false, submissionId: null } : r
+      );
+      await updateDoc(doc(db, 'families', familyId), { routines: updatedRoutines });
+    }
+  };
+
+  // ─── Reward System ───────────────────────────────────────────────────────────
+
+  const addReward = async (reward) => {
+    const familyId = currentUser?.uid;
+    if (!familyId) return;
+    const newReward = { ...reward, id: Date.now().toString() };
+    const updated = [...rewards, newReward];
+    setRewards(updated);
+    await updateDoc(doc(db, 'families', familyId), { rewards: updated });
+  };
+
+  const removeReward = async (rewardId) => {
+    const familyId = currentUser?.uid;
+    if (!familyId) return;
+    const updated = rewards.filter(r => r.id !== rewardId);
+    setRewards(updated);
+    await updateDoc(doc(db, 'families', familyId), { rewards: updated });
+  };
+
+  const requestReward = async (rewardId) => {
+    const familyId = await AsyncStorage.getItem('linkedFamilyId');
+    if (!familyId) return;
+    const reward = rewards.find(r => r.id === rewardId);
+    if (!reward) return;
+    const newRequest = {
+      id: Date.now().toString(),
+      rewardId,
+      rewardTitle: reward.title,
+      rewardEmoji: reward.emoji || '🎁',
+      pointCost: reward.pointCost,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+    };
+    const updated = [...rewardRequests, newRequest];
+    setRewardRequests(updated);
+    await updateDoc(doc(db, 'families', familyId), { rewardRequests: updated });
+  };
+
+  const approveRewardRequest = async (requestId) => {
+    const familyId = currentUser?.uid;
+    if (!familyId) return;
+    const req = rewardRequests.find(r => r.id === requestId);
+    if (!req) return;
+    const updated = rewardRequests.map(r =>
+      r.id === requestId ? { ...r, status: 'approved', reviewedAt: new Date().toISOString() } : r
+    );
+    setRewardRequests(updated);
+    const newPoints = Math.max(0, points - req.pointCost);
+    setPoints(newPoints);
+    await updateDoc(doc(db, 'families', familyId), { rewardRequests: updated, points: newPoints });
+  };
+
+  const rejectRewardRequest = async (requestId) => {
+    const familyId = currentUser?.uid;
+    if (!familyId) return;
+    const updated = rewardRequests.map(r =>
+      r.id === requestId ? { ...r, status: 'rejected', reviewedAt: new Date().toISOString() } : r
+    );
+    setRewardRequests(updated);
+    await updateDoc(doc(db, 'families', familyId), { rewardRequests: updated });
+  };
+
+  const pendingSubmissionsCount = taskSubmissions.filter(s => s.status === 'pending').length;
+  const pendingRewardRequestsCount = rewardRequests.filter(r => r.status === 'pending').length;
 
   return (
     <AppContext.Provider value={{
@@ -1016,6 +1301,9 @@ export const AppProvider = ({ children }) => {
       streak, updateStreak,
       sendPeriodicUpdate,
       isLoading,
+      taskSubmissions, pendingSubmissionsCount, submitTaskPhoto, approveSubmission, rejectSubmission,
+      rewards, addReward, removeReward,
+      rewardRequests, pendingRewardRequestsCount, requestReward, approveRewardRequest, rejectRewardRequest,
     }}>
       {children}
     </AppContext.Provider>

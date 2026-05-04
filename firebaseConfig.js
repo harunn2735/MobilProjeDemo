@@ -1,22 +1,28 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirestore } from "firebase/firestore";
+import {
+  FIREBASE_API_KEY,
+  FIREBASE_AUTH_DOMAIN,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_STORAGE_BUCKET,
+  FIREBASE_MESSAGING_SENDER_ID,
+  FIREBASE_APP_ID,
+} from '@env';
 
-// Firebase'den aldığın güncel bilgiler
 const firebaseConfig = {
-    apiKey: "AIzaSyDH4jGLfI1wNkzMI3Yoic7UhisO8HV3cxg",
-    authDomain: "buddy-8ad86.firebaseapp.com",
-    projectId: "buddy-8ad86",
-    storageBucket: "buddy-8ad86.firebasestorage.app",
-    messagingSenderId: "824710800701",
-    appId: "1:824710800701:web:a602dabe06236e81661154"
+  apiKey: FIREBASE_API_KEY,
+  authDomain: FIREBASE_AUTH_DOMAIN,
+  projectId: FIREBASE_PROJECT_ID,
+  storageBucket: FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: FIREBASE_MESSAGING_SENDER_ID,
+  appId: FIREBASE_APP_ID,
 };
 
-// Uygulamayı başlatıyoruz
 const app = initializeApp(firebaseConfig);
 
-// DİKKAT: Diğer dosyalarımızın (Login.tsx vb.) tanıması için bu isimlerle export ediyoruz
-export const authInstance = getAuth(app);
+export const authInstance = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
 export const db = getFirestore(app);
-
-export default { authInstance, db };

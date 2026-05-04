@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useApp } from '../context/AppContext';
@@ -16,7 +17,10 @@ import SafePointsManagerScreen from '../screens/family/SafePointsManagerScreen';
 import AddRoutineScreen from '../screens/family/AddRoutineScreen';
 import RoutineManagerScreen from '../screens/family/RoutineManagerScreen';
 import AlertHistoryScreen from '../screens/family/AlertHistoryScreen';
+import PhotoApprovalScreen from '../screens/family/PhotoApprovalScreen';
+import RewardsManagerScreen from '../screens/family/RewardsManagerScreen';
 import GameZoneScreen from '../screens/child/GameZoneScreen';
+import TaskPhotoScreen from '../screens/child/TaskPhotoScreen';
 
 const Stack = createStackNavigator();
 
@@ -26,8 +30,11 @@ const RootNavigator = () => {
   console.log('[RootNavigator] Current userType:', userType);
 
   if (isLoading) {
-    // Optionally return a loading spinner here while verifying AsyncStorage and Firebase
-    return null; 
+    return (
+      <View style={{ flex: 1, backgroundColor: '#7C3AED', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
   }
 
   return (
@@ -49,13 +56,16 @@ const RootNavigator = () => {
             <Stack.Screen name="AddRoutine" component={AddRoutineScreen} options={{ title: 'Rutin Düzenle' }} />
             <Stack.Screen name="RoutineManager" component={RoutineManagerScreen} options={{ title: 'Rutinlerim' }} />
             <Stack.Screen name="AlertHistory" component={AlertHistoryScreen} options={{ title: 'Uyarı Geçmişi' }} />
+            <Stack.Screen name={ROUTES.PHOTO_APPROVAL} component={PhotoApprovalScreen} options={{ headerShown: false }} />
+            <Stack.Screen name={ROUTES.REWARDS_MANAGER} component={RewardsManagerScreen} options={{ headerShown: false }} />
           </Stack.Group>
         ) : (
-          // Child Flow
+          // Child Flow — ChildPermissionScreen auto-skips to CHILD_TABS if already set up
           <Stack.Group>
             <Stack.Screen name={ROUTES.CHILD_PERMISSION} component={ChildPermissionScreen} />
             <Stack.Screen name={ROUTES.CHILD_TABS} component={ChildTabNavigator} />
             <Stack.Screen name={ROUTES.GAME_ZONE} component={GameZoneScreen} />
+            <Stack.Screen name={ROUTES.TASK_PHOTO} component={TaskPhotoScreen} options={{ headerShown: false }} />
           </Stack.Group>
         )}
       </Stack.Navigator>

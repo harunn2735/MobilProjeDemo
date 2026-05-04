@@ -34,9 +34,12 @@ export const RoutineProvider = ({ children }) => {
   // Sync Logic - watching linkedFamilyId in AsyncStorage or passed from parent
   useEffect(() => {
     let unsubscribe;
+    let intervalId;
     const initSync = async () => {
       const familyId = await AsyncStorage.getItem('linkedFamilyId');
       if (familyId) {
+        clearInterval(intervalId); // familyId bulundu, polling'i durdur
+        if (unsubscribe) unsubscribe(); // önceki listener varsa kapat
         unsubscribe = onSnapshot(doc(db, 'families', familyId), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -48,14 +51,14 @@ export const RoutineProvider = ({ children }) => {
         });
       }
     };
-    
+
     initSync();
-    // Also periodically check if familyId appeared (for new logins)
-    const interval = setInterval(initSync, 5000); 
+    // familyId henüz yoksa (yeni giriş) periyodik kontrol et
+    intervalId = setInterval(initSync, 5000);
 
     return () => {
       if (unsubscribe) unsubscribe();
-      clearInterval(interval);
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -212,6 +215,20 @@ export const RoutineProvider = ({ children }) => {
     setLastReset(today);
   };
 
+  const setPendingPhoto = async (routineId, submissionId) => {
+    const updated = routines.map(r =>
+      r.id === routineId ? { ...r, pendingPhoto: true, submissionId } : r
+    );
+    await saveRoutines(updated);
+  };
+
+  const clearPendingPhoto = async (routineId) => {
+    const updated = routines.map(r =>
+      r.id === routineId ? { ...r, pendingPhoto: false, submissionId: null } : r
+    );
+    await saveRoutines(updated);
+  };
+
   const todayCompleted = routines.filter(r => r.completed).length;
   const todayTotal = routines.length;
 
@@ -219,6 +236,7 @@ export const RoutineProvider = ({ children }) => {
     <RoutineContext.Provider value={{
       routines, addRoutine, updateRoutine, deleteRoutine,
       completeRoutine, resetDaily, sendReminder,
+      setPendingPhoto, clearPendingPhoto,
       todayCompleted, todayTotal,
     }}>
       {children}

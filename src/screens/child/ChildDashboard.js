@@ -11,7 +11,7 @@ import { ROUTES } from '../../constants/routes';
 const C = COLORS.child;
 
 export default function ChildDashboard() {
-  const { childProfile, points, badges, familyData, updateAvatar, streak } = useApp();
+  const { childProfile, points, badges, familyData, updateAvatar, streak, logout } = useApp();
   const { routines, todayCompleted, todayTotal } = useRoutines();
   const navigation = useNavigation();
   const progress = todayTotal > 0 ? todayCompleted / todayTotal : 0;
@@ -59,9 +59,12 @@ export default function ChildDashboard() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Animated Hero Background */}
         <View style={styles.hero}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+            <Ionicons name="log-out-outline" size={22} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
           <View style={styles.heroInner}>
              <Text style={styles.heroEmoji}>{childProfile?.avatar || '🦁'}</Text>
-             
+
              <Text style={styles.heroGreeting}>{getGreeting()}</Text>
              <Text style={styles.heroName}>{childProfile?.name || 'Kahraman'}</Text>
 
@@ -200,12 +203,16 @@ export default function ChildDashboard() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
-  hero: { 
-    backgroundColor: C.primary, 
+  hero: {
+    backgroundColor: C.primary,
     borderBottomLeftRadius: 40, borderBottomRightRadius: 40,
     paddingTop: 60, paddingBottom: 60,
-    alignItems: 'center', 
-    ...SHADOWS.lg 
+    alignItems: 'center',
+    ...SHADOWS.lg
+  },
+  logoutBtn: {
+    position: 'absolute', top: 52, right: 20,
+    padding: 8, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.15)',
   },
   heroInner: { alignItems: 'center', width: '100%' },
   heroEmoji: { fontSize: 84, textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 4, height: 4 }, textShadowRadius: 10 },

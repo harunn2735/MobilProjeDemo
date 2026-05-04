@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Contacts from 'expo-contacts';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../firebaseConfig'; // Adjust the import level if needed
 import { useApp } from '../../context/AppContext';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import { ROUTES } from '../../constants/routes';
@@ -12,6 +11,19 @@ import { ROUTES } from '../../constants/routes';
 export default function ChildPermissionScreen({ navigation }) {
   const { userType, geofence, save } = useApp();
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [perms, profileStr] = await Promise.all([
+        AsyncStorage.getItem('permissionsGranted'),
+        AsyncStorage.getItem('childProfile'),
+      ]);
+      const profile = profileStr ? JSON.parse(profileStr) : null;
+      if (perms || profile?.name) {
+        navigation.replace(ROUTES.CHILD_TABS);
+      }
+    })();
+  }, []);
 
   const requestPermissions = async () => {
     setLoading(true);

@@ -24,7 +24,9 @@
         "NSLocationAlwaysUsageDescription": "Uygulama kapalıyken bile güvenli bölge uyarıları göndermek için konumu takip eder.",
         "NSLocationWhenInUseUsageDescription": "Konumunuz anlık takip için kullanılır.",
         "NSLocationUsageDescription": "Uygulamanın düzgün çalışması için konum izni gereklidir.",
-        "NSContactsUsageDescription": "Acil durumlarda rehberinizdeki kişilerle iletişime geçebilmek için rehber izni gereklidir."
+        "NSContactsUsageDescription": "Acil durumlarda rehberinizdeki kişilerle iletişime geçebilmek için rehber izni gereklidir.",
+        "NSCameraUsageDescription": "Görev fotoğrafı çekebilmek için kamera izni gereklidir.",
+        "NSPhotoLibraryUsageDescription": "Görev fotoğrafı seçebilmek için galeri izni gereklidir."
       }
     },
     "android": {
@@ -37,9 +39,13 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "RECEIVE_BOOT_COMPLETED",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "plugins": [
@@ -48,9 +54,22 @@
         {
           "locationAlwaysPermission": "Uygulama kapalıyken bile güvenli bölge takibi için 'Her Zaman' iznine ihtiyacımız var.",
           "locationWhenInUsePermission": "Uygulama açıkken konumunuzun takip edilmesi için izin gereklidir.",
-          "isIosBackgroundLocationEnabled": true
+          "isIosBackgroundLocationEnabled": true,
+          "android": {
+            "foregroundService": {
+              "notificationTitle": "Konum takibi aktif"
+            }
+          }
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Görev fotoğrafı seçebilmek için galeri iznine ihtiyacımız var.",
+          "cameraPermission": "Görev fotoğrafı çekebilmek için kamera iznine ihtiyacımız var."
+        }
+      ],
+      "expo-build-properties"
     ],
     "extra": {
       "eas": {

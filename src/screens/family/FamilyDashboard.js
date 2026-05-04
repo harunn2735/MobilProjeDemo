@@ -13,7 +13,7 @@ import { ROUTES } from '../../constants/routes';
 const C = COLORS.family;
 
 export default function FamilyDashboard() {
-  const { childProfile, geofence, safePoints, alerts, points, logout, familyData, liveChildLocation, sendPeriodicUpdate } = useApp();
+  const { childProfile, geofence, safePoints, alerts, points, logout, familyData, liveChildLocation, sendPeriodicUpdate, pendingSubmissionsCount, pendingRewardRequestsCount } = useApp();
   const { todayCompleted, todayTotal } = useRoutines();
   const navigation = useNavigation();
   const progress = todayTotal > 0 ? todayCompleted / todayTotal : 0;
@@ -41,16 +41,18 @@ export default function FamilyDashboard() {
         </View>
 
         {/* Pairing Code Banner */}
-        {familyData?.pairingCode && (
-          <View style={styles.pairingBanner}>
-            <Ionicons name="key" size={24} color="#fff" />
-            <View style={{ flex: 1, marginLeft: SPACING.md }}>
-              <Text style={styles.pairingTitle}>Cihaz Eşleştirme Kodu</Text>
-              <Text style={styles.pairingDesc}>Çocuğunuzun uygulamasından bu kodu girerek bağlanabilirsiniz.</Text>
-            </View>
-            <Text style={styles.pairingCodeTxt}>{familyData.pairingCode}</Text>
+        <View style={styles.pairingBanner}>
+          <View style={styles.pairingHeader}>
+            <Ionicons name="key-outline" size={18} color="#fff" />
+            <Text style={styles.pairingTitle}>Cihaz Eşleştirme Kodu</Text>
           </View>
-        )}
+          <Text style={styles.pairingCodeTxt}>
+            {familyData?.pairingCode ?? '------'}
+          </Text>
+          <Text style={styles.pairingDesc}>
+            Çocuğunuzun uygulamasından bu kodu girerek bağlanabilirsiniz.
+          </Text>
+        </View>
 
         {/* Canlı Durum Özeti */}
         <View style={styles.liveCard}>
@@ -133,15 +135,30 @@ export default function FamilyDashboard() {
           <Text style={styles.progressText}>{todayCompleted} / {todayTotal} görev tamamlandı</Text>
         </View>
 
+        {/* Onay Bildirimleri */}
+        {(pendingSubmissionsCount > 0 || pendingRewardRequestsCount > 0) && (
+          <View style={styles.alertBanner}>
+            <Ionicons name="notifications" size={18} color="#92400E" />
+            <Text style={styles.alertBannerTxt}>
+              {[
+                pendingSubmissionsCount > 0 && `${pendingSubmissionsCount} fotoğraf onayı`,
+                pendingRewardRequestsCount > 0 && `${pendingRewardRequestsCount} ödül talebi`,
+              ].filter(Boolean).join(', ')} bekliyor!
+            </Text>
+          </View>
+        )}
+
         {/* Hızlı Erişim */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Hızlı Erişim</Text>
           <View style={styles.quickGrid}>
             {[
-              { label: 'Güvenli Alan', icon: 'map', route: 'GeofenceMap', color: C.primary },
-              { label: 'Rutin Ekle', icon: 'add-circle', route: 'AddRoutine', color: C.accent },
-              { label: 'Güvenli Noktalar', icon: 'location', route: 'SafePoints', color: '#8B5CF6' },
-              { label: 'Uyarı Geçmişi', icon: 'notifications', route: 'AlertHistory', color: C.danger },
+              { label: 'Güvenli Alan', icon: 'map', route: 'GeofenceMap', color: C.primary, badge: 0 },
+              { label: 'Rutin Ekle', icon: 'add-circle', route: 'AddRoutine', color: C.accent, badge: 0 },
+              { label: 'Güvenli Noktalar', icon: 'location', route: 'SafePoints', color: '#8B5CF6', badge: 0 },
+              { label: 'Uyarı Geçmişi', icon: 'notifications', route: 'AlertHistory', color: C.danger, badge: 0 },
+              { label: 'Fotoğraf Onayları', icon: 'camera', route: 'PhotoApproval', color: '#0EA5E9', badge: pendingSubmissionsCount },
+              { label: 'Ödül Sistemi', icon: 'gift', route: 'RewardsManager', color: '#EC4899', badge: pendingRewardRequestsCount },
             ].map((item, i) => (
               <TouchableOpacity
                 key={i}
@@ -151,6 +168,11 @@ export default function FamilyDashboard() {
               >
                 <View style={[styles.quickIcon, { backgroundColor: item.color + '20' }]}>
                   <Ionicons name={item.icon} size={26} color={item.color} />
+                  {item.badge > 0 && (
+                    <View style={[styles.quickBadge, { backgroundColor: item.color }]}>
+                      <Text style={styles.quickBadgeTxt}>{item.badge}</Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={styles.quickLabel}>{item.label}</Text>
               </TouchableOpacity>
@@ -172,12 +194,17 @@ const styles = StyleSheet.create({
   childName: { fontSize: FONTS.sizes.xl, fontWeight: FONTS.weights.bold, color: C.text },
   logoutBtn: { padding: SPACING.sm },
   pairingBanner: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: C.primary,
-    margin: SPACING.lg, marginTop: 0, padding: SPACING.lg, borderRadius: RADIUS.lg, ...SHADOWS.md
+    backgroundColor: C.primary, margin: SPACING.lg, marginTop: 0,
+    padding: SPACING.lg, borderRadius: RADIUS.lg, ...SHADOWS.md,
+    alignItems: 'center',
   },
-  pairingTitle: { color: '#fff', fontSize: FONTS.sizes.md, fontWeight: FONTS.weights.bold },
-  pairingDesc: { color: 'rgba(255,255,255,0.8)', fontSize: FONTS.sizes.xs, marginTop: 2 },
-  pairingCodeTxt: { color: '#fff', fontSize: FONTS.sizes.xl, fontWeight: FONTS.weights.heavy, letterSpacing: 2 },
+  pairingHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: SPACING.sm },
+  pairingTitle: { color: '#fff', fontSize: FONTS.sizes.sm, fontWeight: FONTS.weights.bold, textTransform: 'uppercase', letterSpacing: 1 },
+  pairingCodeTxt: {
+    color: '#fff', fontSize: 40, fontWeight: FONTS.weights.heavy,
+    letterSpacing: 8, marginVertical: SPACING.sm,
+  },
+  pairingDesc: { color: 'rgba(255,255,255,0.8)', fontSize: FONTS.sizes.xs, textAlign: 'center' },
   
   liveCard: {
     backgroundColor: C.surface, margin: SPACING.lg, marginTop: 0,
@@ -227,4 +254,16 @@ const styles = StyleSheet.create({
   },
   quickIcon: { width: 52, height: 52, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.sm },
   quickLabel: { fontSize: FONTS.sizes.sm, fontWeight: FONTS.weights.semibold, color: C.text, textAlign: 'center' },
+  quickBadge: {
+    position: 'absolute', top: -4, right: -4,
+    minWidth: 18, height: 18, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  quickBadgeTxt: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  alertBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FEF3C7', marginHorizontal: SPACING.lg, marginBottom: SPACING.sm,
+    padding: SPACING.md, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: '#FDE68A',
+  },
+  alertBannerTxt: { fontSize: FONTS.sizes.sm, color: '#92400E', fontWeight: '700', flex: 1 },
 });

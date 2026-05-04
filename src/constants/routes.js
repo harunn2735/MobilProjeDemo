@@ -17,4 +17,7 @@ export const ROUTES = {
   REWARDS: 'Rewards',
   SAFE_NAVIGATION: 'SafeNavigation',
   GAME_ZONE: 'GameZone',
+  TASK_PHOTO: 'TaskPhoto',
+  PHOTO_APPROVAL: 'PhotoApproval',
+  REWARDS_MANAGER: 'RewardsManager',
 };

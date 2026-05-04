@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import { ROUTES } from '../../constants/routes';
@@ -19,6 +20,33 @@ export default function ChildLoginScreen({ navigation }) {
   React.useEffect(() => {
     const checkLinked = async () => {
       const linkedId = await AsyncStorage.getItem('linkedFamilyId');
+      const savedProfileStr = await AsyncStorage.getItem('childProfile');
+      const childLoggedOut = await AsyncStorage.getItem('childLoggedOut');
+      console.log('[ChildLoginScreen] linkedId:', linkedId, '| childLoggedOut:', childLoggedOut, '| profile:', savedProfileStr);
+
+      if (childLoggedOut) {
+        await AsyncStorage.removeItem('childLoggedOut');
+        // If device is already paired AND profile exists, restore directly — no re-setup needed
+        if (linkedId && savedProfileStr) {
+          const profile = JSON.parse(savedProfileStr);
+          if (profile?.name) {
+            console.log('[ChildLoginScreen] restoring after logout for:', profile.name);
+            await updateChildProfile(profile.name, profile.age || '', profile.avatar || '🦁');
+            return;
+          }
+        }
+        if (linkedId) setStep(2);
+        return;
+      }
+
+      if (linkedId && savedProfileStr) {
+        const profile = JSON.parse(savedProfileStr);
+        if (profile?.name) {
+          console.log('[ChildLoginScreen] auto-restoring session for:', profile.name);
+          await updateChildProfile(profile.name, profile.age || '', profile.avatar || '🦁');
+          return;
+        }
+      }
       if (linkedId) setStep(2);
     };
     checkLinked();
@@ -32,7 +60,16 @@ export default function ChildLoginScreen({ navigation }) {
     setLoading(true);
     try {
       await linkChildDevice(pairingCode.trim().toUpperCase());
-      setStep(2); // Move to profile setup
+      // If a profile already exists for this device, restore it — don't force re-setup
+      const savedProfileStr = await AsyncStorage.getItem('childProfile');
+      if (savedProfileStr) {
+        const profile = JSON.parse(savedProfileStr);
+        if (profile?.name) {
+          await updateChildProfile(profile.name, profile.age || '', profile.avatar || '🦁');
+          return;
+        }
+      }
+      setStep(2); // No profile yet, show setup
     } catch (error) {
       Alert.alert('Bağlantı Başarısız', error.message);
     } finally {
